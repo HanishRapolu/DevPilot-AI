@@ -88,3 +88,31 @@ def test_no_credentials_or_other_provider():
         OpenRouterService(Settings(_env_file=None, openrouter_api_key=""))
     with pytest.raises(ValidationError):
         Settings(_env_file=None, openrouter_base_url="https://api.openai.com/v1")
+
+
+def test_dns_error_is_actionable_without_leaking_provider_details():
+    import socket
+    from openai import APIConnectionError
+    llm, create = service(llm_max_attempts=1)
+    error = APIConnectionError(request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"))
+    error.__cause__ = socket.gaierror(11001, "private network detail")
+    create.side_effect = error
+    with pytest.raises(LLMError, match="DNS resolution failed") as caught:
+        asyncio.run(llm.generate("Investigate", Answer))
+    assert "private" not in str(caught.value)
+
+
+def test_rate_limit_retained_after_retries():
+    llm, create = service(llm_max_attempts=1)
+    response = httpx.Response(429, request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"))
+    create.side_effect = APIStatusError("secret provider text", response=response, body=None)
+    with pytest.raises(LLMError, match="Rate limit reached") as caught:
+        asyncio.run(llm.generate("Investigate", Answer))
+    assert "secret" not in str(caught.value)
+
+
+def test_output_budget_is_configurable():
+    llm, create = service(llm_max_output_tokens=4096)
+    create.return_value = completion()
+    asyncio.run(llm.generate("Investigate", Answer))
+    assert create.call_args.kwargs["max_tokens"] == 4096

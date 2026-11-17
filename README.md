@@ -1,5 +1,40 @@
 # DevPilot AI
 
+## Connection troubleshooting
+
+Run checks in a normal PowerShell terminal from the project root:
+
+```powershell
+Set-Location backend
+..\.venv\Scripts\python -m scripts.check_llm
+..\.venv\Scripts\python -m scripts.check_services
+```
+
+The first command checks OpenRouter with your current `backend/.env`; the second
+also checks database persistence. Restart the API after changing `.env` because
+the running API retains its settings. DNS failures and Docker access-denied errors
+inside a restricted assistant session do not establish that these services are
+broken in your normal terminal. Do not replace a working MongoDB URI for that reason.
+
+OpenRouter errors distinguish authentication, credits, rate limits, incompatible
+models, network failures, timeouts and invalid output. `LLM_MAX_OUTPUT_TOKENS`
+defaults to 2048; increase it if generated patches are truncated. No paid model
+fallback is selected automatically.
+
+Docker runs generated code and tests in isolation. Check `docker info` in your
+terminal, then build the fixed runner once from the project root:
+
+```powershell
+docker build -t devpilot-python-tests:phase2 ./sandbox
+```
+
+For approved branch/PR publication, create a fine-grained token at
+https://github.com/settings/personal-access-tokens/new restricted to DevPilot-AI.
+Grant Contents and Pull requests read/write, Issues read, and Metadata read.
+Save it as `GITHUB_TOKEN` in `backend/.env`, never in chat or frontend settings.
+`GITHUB_REPOSITORY=HanishRapolu/DevPilot-AI` identifies the repository but does not
+authorize writes. Public reads can work without a token.
+
 See [PHASE2.md](PHASE2.md) for MCP and sandbox setup, [PHASE3.md](PHASE3.md) for LangGraph and checkpoints, and [PHASE4.md](PHASE4.md) for the dashboard, API authorization, approval flow and current limitations.
 
 A graduate portfolio project using React, FastAPI, MongoDB, OpenRouter, LangGraph and genuine local MCP servers. Creating a task queues a real agent workflow. The dashboard implementation covers execution, review and results; dependencies are installed and its production build passes. Live end-to-end verification is blocked by service connectivity/access. GitHub publication is implemented but has not been live verified.

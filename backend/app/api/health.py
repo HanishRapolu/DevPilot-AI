@@ -8,7 +8,7 @@ router = APIRouter(tags=["health"])
 
 @router.get("/health/live")
 def live() -> dict[str, str]:
-    return {"status": "ok", "phase": "1"}
+    return {"status": "ok", "service": "devpilot-api"}
 
 
 @router.get("/health/ready")

@@ -12,6 +12,11 @@ import tempfile
 
 def main():
     operation, timeout = sys.argv[1], min(int(sys.argv[2]), 120)
+    test_path = sys.argv[3] if len(sys.argv) > 3 else "."
+    if test_path != "." and (PurePosixPath(test_path).is_absolute() or
+            any(p.startswith('.') for p in test_path.split('/')) or
+            '\\' in test_path or ':' in test_path or not test_path.endswith('.py')):
+        raise ValueError("Unsafe test path")
     if operation not in ("run_tests", "check_syntax"):
         raise ValueError("Unsupported operation")
     raw = sys.stdin.buffer.read(10 * 1024 * 1024 + 1)
@@ -39,7 +44,10 @@ def main():
                 failures.append(f"{path.relative_to('/workspace')}: {type(exc).__name__}")
         print(json.dumps({"status": "failed" if failures else "passed", "output": "\n".join(failures) or "Python syntax is valid."}))
         return int(bool(failures))
-    command = [sys.executable, "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", "/opt/pytest.ini", "--rootdir=/workspace", "/workspace"]
+    target = Path('/workspace') / test_path
+    if not target.resolve().is_relative_to(Path('/workspace')) or not target.exists():
+        raise ValueError("Test target is outside workspace or missing")
+    command = [sys.executable, "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", "/opt/pytest.ini", "--rootdir=/workspace", str(target)]
     with tempfile.TemporaryFile() as output:
         try:
             done = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=timeout,

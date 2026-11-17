@@ -30,6 +30,24 @@ class Runtime:
     def close(self):
         self.client.close()
 
+    @staticmethod
+    def projection(value):
+        return {key: value.get(key) for key in (
+            "issue_details", "plan", "investigation_summary", "change_summary", "changed_files", "diff",
+            "test_results", "review_feedback", "retry_count", "approval_status", "current_step", "task_status", "pr_url", "error")}
+
+    def sync_snapshot(self, task_id, snapshot):
+        """Repair the UI projection even when recovery only inspects a paused graph."""
+        pending = [item.value for task in snapshot.tasks for item in task.interrupts]
+        status = "awaiting_approval" if pending else snapshot.values["task_status"]
+        approval = None
+        if pending:
+            approval = {"payload": pending[0], "hash": fingerprint(pending[0])}
+            if pending[0]["kind"] == "github_write":
+                approval["plan"] = ApprovalStore(self.settings.mcp_state_dir / "approvals").load(pending[0]["request_id"])["plan"]
+        self.persist_status(task_id, status, {"workflow": self.projection(snapshot.values), "approval": approval, "decision_claim": None})
+        return {"state": snapshot.values, "interrupts": pending}
+
     def llm(self, prompt, schema):
         async def invoke():
             service = OpenRouterService(self.settings)
@@ -85,7 +103,12 @@ class Runtime:
         # Single workspace MVP: serialize runs and bind it permanently to one task.
         with exclusive(root / "workflow.lock"):
             if not self.settings.mcp_workspace:
-                raise ValueError("Configure a task-specific MCP_WORKSPACE")
+                binding = self.db.workflow_workspaces.find_one({"task_id": task_id})
+                if not binding:
+                    raise ValueError("No workspace binding found for task")
+                from pathlib import Path
+                self.settings = self.settings.model_copy(update={"mcp_workspace": Path(binding["_id"])})
+                self.mcp = MCPClientService(self.settings)
             binding = self.db.workflow_workspaces.find_one({"_id": str(self.settings.mcp_workspace.resolve())})
             if binding and binding["task_id"] != task_id:
                 raise ValueError("Prepare a new workspace for each task")
@@ -105,11 +128,11 @@ class Runtime:
                         "branch": "devpilot/" + task_id, "pr_url": None, "error": None}
             else:
                 if not snapshot.next:
-                    return {"state": snapshot.values, "interrupts": []}
+                    return self.sync_snapshot(task_id, snapshot)
                 pending = [item for task in snapshot.tasks for item in task.interrupts]
                 if pending:
                     if approved is None:
-                        return {"state": snapshot.values, "interrupts": [item.value for item in pending]}
+                        return self.sync_snapshot(task_id, snapshot)
                     if expected_payload_hash is not None and fingerprint(pending[0].value) != expected_payload_hash:
                         raise PermissionError("Approval changed since review")
                     receipt = secrets.token_urlsafe(32)
@@ -120,17 +143,11 @@ class Runtime:
                 else:
                     if approved is not None:
                         raise ValueError("Task is not awaiting approval")
+                    if any(step in ("create_branch", "create_pr") for step in snapshot.next):
+                        raise PermissionError("Interrupted publication requires manual GitHub reconciliation; automatic replay is disabled")
                     data = None
             for value in self.graph.stream(data, config, stream_mode="values"):
-                view = {key: value.get(key) for key in ("issue_details", "plan", "investigation_summary", "changed_files", "diff", "test_results", "review_feedback", "retry_count", "approval_status", "current_step", "task_status", "pr_url", "error")}
+                view = self.projection(value)
                 self.persist_status(task_id, value.get("task_status", "running"), {"workflow": view})
             snapshot = self.graph.get_state(config)
-            pending = [item.value for task in snapshot.tasks for item in task.interrupts]
-            status = "awaiting_approval" if pending else snapshot.values["task_status"]
-            approval = None
-            if pending:
-                approval = {"payload": pending[0], "hash": fingerprint(pending[0])}
-                if pending[0]["kind"] == "github_write":
-                    approval["plan"] = ApprovalStore(self.settings.mcp_state_dir / "approvals").load(pending[0]["request_id"])["plan"]
-            self.persist_status(task_id, status, {"approval": approval, "decision_claim": None})
-            return {"state": snapshot.values, "interrupts": pending}
+            return self.sync_snapshot(task_id, snapshot)

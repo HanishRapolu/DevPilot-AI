@@ -1,14 +1,5 @@
-# DevPilot fixture repository
+# Intentional bug fixture
 
-Two intentional bugs: percentage discount subtracts an absolute amount, and average uses an off-by-one denominator. Run `python -m pytest -q` here: **2 fail, 2 pass** is the expected baseline. These failures are separate from backend correctness tests.
+Two bugs: discounted_price(200,10) returns 190 instead of 180, and average([2,4,6]) returns 3 instead of 4. Empty averages and invalid discounts raise ValueError. The expected unpatched baseline is **2 failed, 2 passed**.
 
-This folder can be copied into a standalone GitHub repository in a later phase. It is not yet an external repository and DevPilot does not execute it automatically.
-
-Docker recipe (build installs Pytest; obtain permission first):
-
-```powershell
-docker build -t devpilot-demo ./demo-repo
-docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 128m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=16m devpilot-demo
-```
-
-This is a manual fixture runner, not the future agent execution sandbox. Do not mount host credentials or the Docker socket into a task container.
+Use the shared sandbox/ image and Testing MCP, not a separate fixture Dockerfile. See docs/setup-guide.md for the fixed SANDBOX_TEST_PATH and repository allowlist. This folder is part of the application repository; it does not represent a separate external repository. Do not fix the baseline fixtures when running application correctness tests.

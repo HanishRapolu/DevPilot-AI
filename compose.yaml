@@ -1,4 +1,14 @@
 services:
+  sandbox:
+    profiles: ["tools"]
+    build: ./sandbox
+    image: devpilot-python-tests:phase2
+    # Build only. Testing MCP supplies every isolation flag when running it.
+    network_mode: none
+    read_only: true
+    user: "65534:65534"
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
   mongodb:
     image: mongo:8.0
     ports:

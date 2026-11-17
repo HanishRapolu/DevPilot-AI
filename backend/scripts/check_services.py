@@ -9,6 +9,7 @@ import asyncio
 import json
 import subprocess
 import sys
+import socket
 from uuid import UUID
 
 from pymongo import MongoClient
@@ -16,7 +17,7 @@ from pymongo import MongoClient
 from app.api.tasks import create_task, get_task
 from app.config import Settings
 from app.models import TaskCreate
-from app.services.llm import OpenRouterService
+from app.services.llm import OpenRouterService, LLMError
 from scripts.check_llm import SmokeAnswer
 
 
@@ -61,6 +62,10 @@ def main() -> int:
             if args.worker == "database":
                 check_database()
             else:
+                try:
+                    socket.getaddrinfo("openrouter.ai", 443)
+                except socket.gaierror:
+                    raise LLMError("DNS resolution failed for openrouter.ai. Check network/DNS access from this terminal.") from None
                 asyncio.run(check_llm())
             print(json.dumps({"check": args.worker, "status": "passed"}))
             return 0
@@ -72,11 +77,17 @@ def main() -> int:
                 category = "dns_resolution_failed"
             elif getattr(exc, "code", None) == 18:
                 category = "authentication_failed"
-            print(json.dumps({"check": args.worker, "status": "failed",
-                              "error_type": type(exc).__name__, "category": category}))
+            report = {"check": args.worker, "status": "failed",
+                      "error_type": type(exc).__name__, "category": category}
+            if isinstance(exc, LLMError):
+                report["message"] = str(exc)
+            print(json.dumps(report))
             return 1
     failed = False
-    for name, timeout in [("database", 35), ("openrouter", 105)]:
+    settings = Settings()
+    llm_deadline = int(settings.llm_timeout_seconds * settings.llm_max_attempts + 4 * settings.llm_max_attempts + 15)
+    for name, timeout in [("database", 35), ("openrouter", llm_deadline)]:
+        print(f"Checking {name}; deadline {timeout}s. Please wait...", flush=True)
         try:
             result = subprocess.run([sys.executable, "-m", "scripts.check_services", "--worker", name],
                                     capture_output=True, text=True, timeout=timeout)
@@ -87,6 +98,9 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             print(json.dumps({"check": name, "status": "timeout"}), flush=True)
             failed = True
+        except KeyboardInterrupt:
+            print(json.dumps({"check": name, "status": "cancelled", "message": "Interrupted by user; no pass/fail conclusion."}), flush=True)
+            return 130
         except (ValueError, OSError):
             print(json.dumps({"check": name, "status": "failed", "error_type": "CheckProcessError"}), flush=True)
             failed = True

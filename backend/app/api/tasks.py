@@ -6,7 +6,7 @@ from app.models import utc_now
 from pymongo.database import Database
 
 from app.database import get_database
-from app.models import Task, TaskCreate, TaskEvent, TaskPage
+from app.models import Task, TaskCreate, TaskPage
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -14,6 +14,8 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 @router.post("", response_model=Task, status_code=201)
 def create_task(payload: TaskCreate, db: Database = Depends(get_database), request: Request = None) -> Task:
     expected = request.app.state.settings.github_repository.lower() if request else payload.repository_url.removeprefix("https://github.com/").lower()
+    if not expected:
+        raise HTTPException(503, "Configure GITHUB_REPOSITORY in backend/.env before starting a task.")
     if payload.repository_url.removeprefix("https://github.com/").lower() != expected:
         raise HTTPException(403, "Repository is not authorized in backend configuration.")
     if request and not payload.issue_number:

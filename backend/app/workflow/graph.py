@@ -4,6 +4,7 @@ import json
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt
 from langgraph.errors import GraphInterrupt
+from app.services.llm import LLMError
 
 from app.workflow.models import WorkflowState, Plan, InvestigationRequest, Investigation, Development, Review
 
@@ -43,6 +44,8 @@ class Workflow:
                 raise
             except Exception as exc:
                 self.event(local, name, "failed", error_type=type(exc).__name__)
+                if isinstance(exc, LLMError):
+                    return {"current_step": name, "task_status": "failed", "error": f"{name}: {exc}"}
                 return {"current_step": name, "task_status": "failed", "error": f"{name} failed ({type(exc).__name__}); inspect configuration or service availability."}
             self.event(local, name, "completed")
             return {"current_step": name, **update}
@@ -84,18 +87,26 @@ class Workflow:
             raise ValueError("Context budget exceeded")
         output = self.agent("developer", {"issue": s["issue_details"], "findings": s["investigation_summary"],
                            "code": content, "feedback": s.get("review_feedback", ""), "tests": s.get("test_results", {})}, Development)
-        return {"patch": output["patch"], "relevant_files": content}
+        return {"patch": output["patch"], "change_summary": output["explanation"], "relevant_files": content}
 
     def validate(self, s):
-        self.tool(s, "repository", "apply_patch", {"patch": s["patch"]})
+        self.event(s, "validate_patch", "tool_started", tool="repository.apply_patch")
+        result = self.tools("repository", "apply_patch", {"patch": s["patch"]})
+        self.event(s, "validate_patch", "tool_completed" if result.ok else "tool_failed", tool="repository.apply_patch")
+        if not result.ok:
+            if (result.error or {}).get("code") == "rejected":
+                return {"patch_valid": False, "review_feedback": "Patch rejected by deterministic validation: " + result.error["message"], "review_passed": False}
+            raise RuntimeError("Repository MCP failed")
         diff = self.tool(s, "repository", "get_diff")
         if not diff["files"] or not set(diff["files"]).issubset(s["relevant_files"]):
             raise ValueError("Patch scope invalid")
-        return {"diff": diff, "changed_files": diff["files"]}
+        return {"diff": diff, "changed_files": diff["files"], "patch_valid": True}
 
     def tests(self, s):
         syntax = self.tool(s, "testing", "check_syntax")
         results = self.tool(s, "testing", "run_tests") if syntax["status"] == "passed" else syntax
+        if results["status"] == "infrastructure_error" or results.get("cleanup_confirmed") is False:
+            return {"test_results": results, "task_status": "failed", "error": "Docker infrastructure or cleanup failed. Check engine access and the sandbox image before starting a new task."}
         return {"test_results": results}
 
     def reviewer(self, s):
@@ -152,7 +163,10 @@ class Workflow:
         graph.add_edge(START, "load_issue")
         order = ["load_issue", "planner", "investigator", "developer", "validate_patch", "test_runner", "reviewer"]
         for current, following in zip(order, order[1:]):
-            graph.add_conditional_edges(current, lambda s, nxt=following: END if s.get("task_status") == "failed" else nxt)
+            if current == "validate_patch":
+                graph.add_conditional_edges(current, lambda s: END if s.get("task_status") == "failed" else ("test_runner" if s.get("patch_valid") else "retry"))
+            else:
+                graph.add_conditional_edges(current, lambda s, nxt=following: END if s.get("task_status") == "failed" else nxt)
         graph.add_conditional_edges("reviewer", lambda s: END if s.get("task_status") == "failed" else ("human_approval" if s["review_passed"] else "retry"))
         graph.add_conditional_edges("retry", lambda s: END if s.get("task_status") == "failed" else "developer")
         graph.add_conditional_edges("human_approval", lambda s: "create_branch" if s.get("approval_status") == "approved" and s.get("task_status") != "failed" else END)

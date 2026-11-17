@@ -1,0 +1,5 @@
+{
+  "id": "clamp",
+  "title": "Clamp returns the wrong upper bound",
+  "body": "clamp(value, low, high) must return value within inclusive bounds."
+}

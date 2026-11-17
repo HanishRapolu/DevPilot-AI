@@ -10,7 +10,7 @@ import threading
 from uuid import uuid4
 
 from app.mcp_tools.common import ToolError
-from app.mcp_tools.workspace import Workspace
+from app.mcp_tools.workspace import Workspace, safe_name
 
 
 def bounded_run(command, *, input, timeout, **kwargs):
@@ -54,7 +54,7 @@ def bounded_run(command, *, input, timeout, **kwargs):
 
 
 class TestingTools:
-    def __init__(self, workspace: Workspace, image="devpilot-python-tests:phase2", timeout=60, runner=None):
+    def __init__(self, workspace: Workspace, image="devpilot-python-tests:phase2", timeout=60, runner=None, test_path="."):
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/:@-]{0,200}", image):
             raise ToolError("Invalid sandbox image.")
         if not 5 <= timeout <= 120:
@@ -63,11 +63,16 @@ class TestingTools:
         self.image = image
         self.timeout = timeout
         self.runner = runner
+        if test_path != ".":
+            safe_name(test_path)
+            if not test_path.endswith('.py') or test_path not in workspace.files:
+                raise ToolError("Configured test path must be an existing workspace Python file.")
+        self.test_path = test_path
 
     @classmethod
     def from_environment(cls):
         return cls(Workspace.from_environment(), os.getenv("SANDBOX_IMAGE", "devpilot-python-tests:phase2"),
-                   int(os.getenv("SANDBOX_TIMEOUT_SECONDS", "60")))
+                   int(os.getenv("SANDBOX_TIMEOUT_SECONDS", "60")), test_path=os.getenv("SANDBOX_TEST_PATH", "."))
 
     def run(self, operation: str) -> dict:
         if operation not in ("run_tests", "check_syntax"):
@@ -90,7 +95,7 @@ class TestingTools:
                        "--log-driver=none", "--tmpfs=/tmp:rw,noexec,nosuid,size=64m",
                        "--tmpfs=/workspace:rw,noexec,nosuid,size=16m,mode=1777",
                        "--env=PYTEST_DISABLE_PLUGIN_AUTOLOAD=1", "--env=PYTHONDONTWRITEBYTECODE=1",
-                       "--interactive", self.image, operation, str(self.timeout)]
+                       "--interactive", self.image, operation, str(self.timeout), self.test_path]
             started = time.monotonic()
             cleanup_ok = True
             try:

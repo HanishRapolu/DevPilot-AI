@@ -52,3 +52,5 @@ class WorkflowState(TypedDict, total=False):
     base: str
     branch: str
     review_passed: bool
+    patch_valid: bool
+    change_summary: str

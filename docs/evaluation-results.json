@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-11-14T15:05:30.166228+00:00",
+  "mode": "reference",
+  "model": null,
+  "issues": [
+    {
+      "issue": "clamp",
+      "status": "blocked",
+      "repairs": null,
+      "test_status": null,
+      "mcp_calls": 1,
+      "mcp_successful_calls": 1,
+      "prepublication_complete": false,
+      "baseline_status": "infrastructure_error",
+      "reason": "Baseline must fail assertions; check Docker, image and fixture."
+    },
+    {
+      "issue": "factorial",
+      "status": "blocked",
+      "repairs": null,
+      "test_status": null,
+      "mcp_calls": 1,
+      "mcp_successful_calls": 1,
+      "prepublication_complete": false,
+      "baseline_status": "infrastructure_error",
+      "reason": "Baseline must fail assertions; check Docker, image and fixture."
+    },
+    {
+      "issue": "mean",
+      "status": "blocked",
+      "repairs": null,
+      "test_status": null,
+      "mcp_calls": 1,
+      "mcp_successful_calls": 1,
+      "prepublication_complete": false,
+      "baseline_status": "infrastructure_error",
+      "reason": "Baseline must fail assertions; check Docker, image and fixture."
+    },
+    {
+      "issue": "median",
+      "status": "blocked",
+      "repairs": null,
+      "test_status": null,
+      "mcp_calls": 1,
+      "mcp_successful_calls": 1,
+      "prepublication_complete": false,
+      "baseline_status": "infrastructure_error",
+      "reason": "Baseline must fail assertions; check Docker, image and fixture."
+    },
+    {
+      "issue": "unique",
+      "status": "blocked",
+      "repairs": null,
+      "test_status": null,
+      "mcp_calls": 1,
+      "mcp_successful_calls": 1,
+      "prepublication_complete": false,
+      "baseline_status": "infrastructure_error",
+      "reason": "Baseline must fail assertions; check Docker, image and fixture."
+    }
+  ],
+  "metrics": {
+    "evaluated": 0,
+    "blocked": 5,
+    "issue_resolution_rate": null,
+    "final_test_pass_rate": null,
+    "average_repairs": null,
+    "mcp_protocol_success_rate": 1.0,
+    "prepublication_completion_rate": null,
+    "published_prs": 0
+  },
+  "notes": "Reference results are not AI performance. MCP protocol success does not imply Docker/test success. Live mode stops before approval; GitHub is a local fixture."
+}

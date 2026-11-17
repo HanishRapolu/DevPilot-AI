@@ -1,0 +1,5 @@
+{
+  "id": "median",
+  "title": "Median of even length input is incorrect",
+  "body": "median averages the two middle values for even input; empty raises ValueError."
+}

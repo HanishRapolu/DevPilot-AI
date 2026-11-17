@@ -1,0 +1,5 @@
+{
+  "id": "unique",
+  "title": "Unique values lose their original order",
+  "body": "unique(values) must preserve first-occurrence order."
+}

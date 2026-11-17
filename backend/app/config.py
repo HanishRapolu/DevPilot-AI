@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     openrouter_structured_outputs: bool = True
     llm_timeout_seconds: float = Field(default=30, ge=1, le=120)
     llm_max_attempts: int = Field(default=3, ge=1, le=5)
+    llm_max_output_tokens: int = Field(default=2048, ge=256, le=16384)
     cors_origins: list[str] = ["http://localhost:5173"]
     github_token: SecretStr = SecretStr("")
     dashboard_api_token: SecretStr = SecretStr("")
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
     mcp_state_dir: Path = Path(__file__).resolve().parents[1] / ".devpilot"
     mcp_timeout_seconds: float = Field(default=150, ge=10, le=240)
     sandbox_image: str = "devpilot-python-tests:phase2"
+    sandbox_test_path: str = "."
     sandbox_timeout_seconds: int = Field(default=60, ge=5, le=120)
 
     @field_validator("repository_source", "mcp_workspace", mode="before")

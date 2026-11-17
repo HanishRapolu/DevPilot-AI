@@ -1,7 +1,8 @@
 """Trusted local approval store, outside all agent-visible paths.
 
 This is transient control state, not a replacement for MongoDB task storage.
-Only the human CLI invokes approve(); there is no approval MCP tool or HTTP route.
+Only trusted backend decision handling or the human CLI invokes approve();
+there is no approval MCP tool. HTTP decisions require the dashboard bearer token.
 """
 import hashlib
 import json

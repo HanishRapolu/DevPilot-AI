@@ -52,6 +52,7 @@ class MCPClientService:
                        DEVPILOT_APPROVALS=str(self.settings.mcp_state_dir.resolve() / "approvals"))
         if server == "testing":
             env.update(SANDBOX_IMAGE=self.settings.sandbox_image,
+                       SANDBOX_TEST_PATH=self.settings.sandbox_test_path,
                        SANDBOX_TIMEOUT_SECONDS=str(self.settings.sandbox_timeout_seconds))
         return env
 
